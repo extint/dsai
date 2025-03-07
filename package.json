@@ -1,0 +1,11 @@
+{
+  "dependencies": {
+    "@codemirror/lang-cpp": "^6.0.2",
+    "@uiw/react-codemirror": "^4.23.8",
+    "mermaid": "^11.4.1",
+    "python-parser": "^1.0.3",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.1.5"
+  }
+}
