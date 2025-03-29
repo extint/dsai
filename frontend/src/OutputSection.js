@@ -6,6 +6,8 @@ import { CopyToClipboard } from "react-copy-to-clipboard";
 import DoubtDialogue from "./doubtDialogue";
 import "./OutputSection.css";
 import axios from "axios";
+import Cookies from "js-cookie";
+import { v4 as uuidv4 } from "uuid";
 import python from "react-syntax-highlighter/dist/esm/languages/prism/python";
 import java from "react-syntax-highlighter/dist/esm/languages/prism/java";
 import cpp from "react-syntax-highlighter/dist/esm/languages/prism/cpp";
@@ -25,6 +27,15 @@ const OutputSection = ({ output: initialOutput }) => {
   const [showDialogue, setShowDialogue] = useState(false);
   const [refreshingSection, setRefreshingSection] = useState(null);
   const [error, setError] = useState(null);
+
+  // Ensure each user gets a unique session ID
+  useEffect(() => {
+    let sessionId = Cookies.get("session_id");
+    if (!sessionId) {
+      sessionId = uuidv4();
+      Cookies.set("session_id", sessionId, { expires: 7, secure: true, sameSite: "Strict" });
+    }
+  }, []);
 
   // Function to clean and structure code output
   const cleanCode = (code) => {
@@ -63,16 +74,16 @@ const OutputSection = ({ output: initialOutput }) => {
   const refreshContent = async (section) => {
     setRefreshingSection(section);
     setError(null);
+    const sessionId = Cookies.get("session_id"); // Retrieve session ID
 
     try {
       const response = await axios.post(
         `http://127.0.0.1:${PORT}/answerq/refresh`,
         { section, language: activeLanguage },
-        { headers: { "Content-Type": "application/json" } }
+        { headers: { "Content-Type": "application/json", "x-session-id": sessionId } }
       );
 
       const newContent = response.data?.answer?.[section] || "No data available";
-      console.log(newContent)
 
       setSectionData((prevData) => ({
         ...prevData,
@@ -108,61 +119,71 @@ const OutputSection = ({ output: initialOutput }) => {
   return (
     <div className="output-section">
       <h2 className="title">Generated Output</h2>
-
-      {/* Code Section */}
-      <div className="card">
-        <div className="card-header">
-          <h3 className="card-title">Generated Code</h3>
-          <div className="refresh-button">
-            <button onClick={() => refreshContent("Code")} disabled={refreshingSection === "Code"}>
-              {refreshingSection === "Code" ? "Refreshing..." : "🔄 Refresh"}
-            </button>
-          </div>
-        </div>
-        <div className="language-switcher">
-          {["python", "cpp", "java"].map((language) => (
-            <button
-              key={language}
-              onClick={() => setActiveLanguage(language)}
-              className={activeLanguage === language ? "active" : ""}
-            >
-              {language.toUpperCase()}
-            </button>
-          ))}
-        </div>
-        <div className="code-window" onMouseUp={handleTextSelection}>
-          <SyntaxHighlighter language={activeLanguage} style={materialDark}>
-            {sectionData?.[activeLanguage]?.Code || "No code generated"}
-          </SyntaxHighlighter>
-          <div className="copy-button">
-            <CopyToClipboard
-              text={sectionData?.[activeLanguage]?.Code || ""}
-              onCopy={handleCopy}
-            >
-              <button className={`copy-btn ${isCopied ? "copied" : ""}`}>
-                {isCopied ? "Copied!" : "Copy to Clipboard"}
+      
+      <div className="output-container">
+        {/* Left Panel - Code Section */}
+        <div className="code-panel">
+          <div className="panel-header">
+            <h3 className="panel-title">Code</h3>
+            <div className="language-switcher">
+              {["python", "cpp", "java"].map((language) => (
+                <button
+                  key={language}
+                  onClick={() => setActiveLanguage(language)}
+                  className={activeLanguage === language ? "active" : ""}
+                >
+                  {language.toUpperCase()}
+                </button>
+              ))}
+            </div>
+            <div className="action-buttons">
+              <button 
+                className="refresh-btn" 
+                onClick={() => refreshContent("Code")} 
+                disabled={refreshingSection === "Code"}
+              >
+                {refreshingSection === "Code" ? "⏳" : "🔄"}
               </button>
-            </CopyToClipboard>
-          </div>
-        </div>
-      </div>
-
-      {/* Other Sections */}
-      {["Logic", "Time_Complexity", "Space_Complexity", "Improvements"].map((section) => (
-        <div className="card" key={section}>
-          <div className="card-header">
-            <h3 className="card-title">{section.replace("_", " ")}</h3>
-            <div className="refresh-button">
-              <button onClick={() => refreshContent(section)} disabled={refreshingSection === section}>
-                {refreshingSection === section ? "Refreshing..." : "🔄 Refresh"}
-              </button>
+              <CopyToClipboard
+                text={sectionData?.[activeLanguage]?.Code || ""}
+                onCopy={handleCopy}
+              >
+                <button className={`copy-btn ${isCopied ? "copied" : ""}`}>
+                  {isCopied ? "✓" : "📋"}
+                </button>
+              </CopyToClipboard>
             </div>
           </div>
-          <ReactMarkdown className="markdown-content">
-            {sectionData?.[activeLanguage]?.[section] || "No data available"}
-          </ReactMarkdown>
+          <div className="code-content" onMouseUp={handleTextSelection}>
+            <SyntaxHighlighter language={activeLanguage} style={materialDark}>
+              {sectionData?.[activeLanguage]?.Code || "No code generated"}
+            </SyntaxHighlighter>
+          </div>
         </div>
-      ))}
+        
+        {/* Right Panel - Analysis Sections */}
+        <div className="analysis-panel">
+          {["Logic", "Time_Complexity", "Space_Complexity", "Improvements"].map((section) => (
+            <div className="analysis-section" key={section}>
+              <div className="analysis-header">
+                <h3 className="analysis-title">{section.replace("_", " ")}</h3>
+                <button 
+                  className="refresh-btn" 
+                  onClick={() => refreshContent(section)} 
+                  disabled={refreshingSection === section}
+                >
+                  {refreshingSection === section ? "⏳" : "🔄"}
+                </button>
+              </div>
+              <div className="analysis-content">
+                <ReactMarkdown className="markdown-content">
+                  {sectionData?.[activeLanguage]?.[section] || "No data available"}
+                </ReactMarkdown>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
 
       {showDialogue && (
         <DoubtDialogue
@@ -173,6 +194,8 @@ const OutputSection = ({ output: initialOutput }) => {
           onClose={() => setShowDialogue(false)}
         />
       )}
+      
+      {error && <div className="error-message">Error: {error}</div>}
     </div>
   );
 };

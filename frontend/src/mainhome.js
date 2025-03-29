@@ -1,87 +1,97 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import OutputSection from "./OutputSection";
 import "./mainhome.css";
 import TextInput from "./TextInput";
 import CodeInput from "./CodeInput";
-import Button from '@mui/material/Button';
-import axios from "axios"
+import Button from "@mui/material/Button";
+import axios from "axios";
+import Cookies from "js-cookie";
+import { v4 as uuidv4 } from "uuid"; // For generating unique session IDs
 
 const PORT = process.env.REACT_APP_PORT;
 
 const MyApp = () => {
-  const [problem, setProblem] = useState("");
-  const [code, setCode] = useState(""); // State to hold the code input
-  const [output, setOutput] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [isCodeMode, setIsCodeMode] = useState(false);
+    const [problem, setProblem] = useState("");
+    const [code, setCode] = useState("");
+    const [output, setOutput] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [isCodeMode, setIsCodeMode] = useState(false);
 
-  // Function to handle changes in the problem input
-  const handleProblemChange = (e) => setProblem(e.target.value);
+    useEffect(() => {
+        let sessionId = Cookies.get("session_id");
+        if (!sessionId) {
+            sessionId = uuidv4(); // Generate a unique session ID
+            Cookies.set("session_id", sessionId, { expires: 7, secure: true, sameSite: "Strict" });
+        }
 
-  // Function to handle changes in the code editor
-  const handleCodeChange = (newCode) => {
-    setCode(newCode); // Update the code state with the new code
-  };
+        const storedChats = Cookies.get(`chatHistory_${sessionId}`);
+        if (storedChats) {
+            setOutput(JSON.parse(storedChats));
+        }
+    }, []);
 
-  // Toggle between text mode and code mode
-  const toggleMode = () => {
-    setIsCodeMode(!isCodeMode);
-    setOutput(null)
-  };
+    const handleProblemChange = (e) => setProblem(e.target.value);
+    const handleCodeChange = (newCode) => setCode(newCode);
 
-  const handleSubmit = async () => {
-    setLoading(true);
-    setError(null);
-  
-    try {
-      const response = await axios.post(`http://127.0.0.1:${PORT}/answerq/answerdsaquestion`, {
-        problemStatement: problem,
-      }, {
-        headers: { "Content-Type": "application/json" }
-      });
-  
-      // Axios automatically parses JSON, no need for .json()
-      setOutput(response.data);
-  
-    } catch (err) {
-      setError(err.response?.data?.error || "An error occurred");
-    } finally {
-      setLoading(false);
-    }
-  };
+    const handleSubmit = async () => {
+        setLoading(true);
+        setError(null);
+        const sessionId = Cookies.get("session_id");
 
-  return (
-    <div className="app-container">
-      <header className="header">
-        <h1 className="heading">DSAI</h1>
-      </header>
+        try {
+            const response = await axios.post(`http://127.0.0.1:${PORT}/answerq/answerdsaquestion`, {
+                problemStatement: problem,
+            }, {
+                headers: { 
+                    "Content-Type": "application/json",
+                    "x-session-id": sessionId // Attach session ID
+                }
+            });
 
-      <main className="main-content">
-        {/* <div className="input"> */}
-          {isCodeMode ? (
-            <CodeInput
-              problem={code} // Pass the code state to CodeInput
-              handleCodeChange={handleCodeChange} // Handle changes in the code editor
-              handleSubmit={handleSubmit}
-              language="python" // Default language (can be dynamic)
-            />
-          ) : (
-            <TextInput
-              problem={problem}
-              handleProblemChange={handleProblemChange}
-              handleSubmit={handleSubmit}
-            />
-          )}
-        {/* </div> */}
-        <Button className = "toggleButton" onClick={toggleMode} variant="outlined">Toggle Mode</ Button>
-        {loading && <p className="loading">Loading...</p>}
-        {error && <p className="error">Error: {error}</p>}
+            setOutput(response.data);
+            Cookies.set(`chatHistory_${sessionId}`, JSON.stringify(response.data), { expires: 1, secure: true, sameSite: "Strict" });
 
-        {output && <OutputSection output={output} />}
-      </main>
-    </div>
-  );
+        } catch (err) {
+            setError(err.response?.data?.error || "An error occurred");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const clearChatHistory = () => {
+        const sessionId = Cookies.get("session_id");
+        Cookies.remove(`chatHistory_${sessionId}`);
+        setOutput(null);
+    };
+
+    return (
+        <div className="app-container">
+            <header className="header">
+                <h1 className="heading">DSAI</h1>
+            </header>
+
+            <main className="main-content">
+                {isCodeMode ? (
+                    <CodeInput problem={code} handleCodeChange={handleCodeChange} handleSubmit={handleSubmit} language="python" />
+                ) : (
+                    <TextInput problem={problem} handleProblemChange={handleProblemChange} handleSubmit={handleSubmit} />
+                )}
+
+                <Button className="toggleButton" onClick={() => setIsCodeMode(!isCodeMode)} variant="outlined">
+                    Toggle Mode
+                </Button>
+                <Button className="clearChatButton" onClick={clearChatHistory} variant="outlined">
+                    Clear Chat History
+                </Button>
+
+                {loading && <p className="loading">Loading...</p>}
+                {error && <p className="error">Error: {error}</p>}
+
+                {output && <OutputSection output={output} />}
+            </main>
+        </div>
+    );
 };
 
 export default MyApp;

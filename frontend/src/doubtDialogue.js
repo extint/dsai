@@ -1,32 +1,80 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
-import axios from "axios"
+import axios from "axios";
+import Cookies from "js-cookie";
+import { v4 as uuidv4 } from "uuid";
+import "./doubtDialogue.css";
 
-const DoubtDialogue = ({
-  activeLanguage,
-  selectedText,
-  dialoguePosition,
-  showDialogue,
-  onClose
-}) => {
+const DoubtDialogue = ({ activeLanguage, selectedText, dialoguePosition, showDialogue, onClose }) => {
   const [userDoubt, setUserDoubt] = useState("");
   const [followUpResponse, setFollowUpResponse] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [doubts, setDoubts] = useState([]);
-  const [currentIndex, setCurrentIndex] = useState(0); // Track which doubt is active
-  // Add a new doubt
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isExpanded, setIsExpanded] = useState(true);
+  const dialogueRef = useRef(null);
+
+  // Calculate optimal position based on selection
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+
+  // Initialize session ID and load cached doubts
+  useEffect(() => {
+    let sessionId = Cookies.get("session_id");
+    if (!sessionId) {
+      sessionId = uuidv4();
+      Cookies.set("session_id", sessionId, { expires: 7, secure: true, sameSite: "Strict" });
+    }
+    const storedDoubts = Cookies.get("doubtsHistory");
+    if (storedDoubts) setDoubts(JSON.parse(storedDoubts));
+  }, []);
+
+  // Update position based on selection position
+  useEffect(() => { 
+    if (showDialogue && dialoguePosition) {
+      // Get viewport dimensions
+      const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
+      
+      // Get dialogue dimensions (if available)
+      const dialogueHeight = dialogueRef.current ? dialogueRef.current.offsetHeight : 400;
+      const dialogueWidth = dialogueRef.current ? dialogueRef.current.offsetWidth : 400;
+      
+      // Calculate ideal position (near the selection)
+      let top = dialoguePosition.y + 300; // Slightly below selection
+      let left = dialoguePosition.x+dialoguePosition.width+800 ;
+      
+      // Adjust if would go off screen
+      if (top + dialogueHeight > 2*viewportHeight) {
+        top = Math.max(20, dialoguePosition.y - dialogueHeight - 20); // Place above selection
+      }
+      
+      if (left + dialogueWidth > viewportWidth) {
+        left = Math.max(20, viewportWidth - dialogueWidth - 20); // Adjust to fit screen width
+      }
+      
+      setPosition({ top, left });
+    }
+  }, [showDialogue, dialoguePosition]);
+
+  // Store doubts in cookies
+  useEffect(() => {
+    if (doubts.length > 0) {
+      Cookies.set("doubtsHistory", JSON.stringify(doubts), { expires: 7, secure: true, sameSite: "Strict" });
+    }
+  }, [doubts]);
+
   const addDoubt = (doubt) => {
-    setDoubts((prev) => [...prev, [doubt, activeLanguage]]);
-    setCurrentIndex(doubts.length); // Set to the latest doubt
+    setDoubts((prev) => {
+      const updatedDoubts = [...prev, { ...doubt, language: activeLanguage, timestamp: new Date().toLocaleString() }];
+      setCurrentIndex(updatedDoubts.length - 1);
+      return updatedDoubts;
+    });
   };
-// Navigate to previous and next doubts
-  const goToPreviousDoubt = () => {
-    if (currentIndex > 0) setCurrentIndex((prevIndex) => prevIndex - 1);
-  };
-  const goToNextDoubt = () => {
-    if (currentIndex < doubts.length - 1) setCurrentIndex((prevIndex) => prevIndex + 1);
-  };
+
+  const goToPreviousDoubt = () => setCurrentIndex((prev) => Math.max(0, prev - 1));
+  const goToNextDoubt = () => setCurrentIndex((prev) => Math.min(doubts.length - 1, prev + 1));
+
   const handleDoubtSubmit = async () => {
     if (!selectedText || !userDoubt) return;
 
@@ -34,164 +82,134 @@ const DoubtDialogue = ({
     setLoading(true);
     setError(null);
 
+    const sessionId = Cookies.get("session_id");
+    const PORT = process.env.REACT_APP_PORT;
+
     try {
-      const response = await axios.post("http://127.0.0.1:5175/answerq/answerfollowup", {
-        doubt: question,
-        language: activeLanguage,},
-        {headers: { "Content-Type": "application/json" }},
+      const response = await axios.post(
+        `http://127.0.0.1:${PORT}/answerq/answerfollowup`,
+        { doubt: question, language: activeLanguage },
+        { headers: { "Content-Type": "application/json", "x-session-id": sessionId } }
       );
 
-      console.log(response)
-      setFollowUpResponse(response.data.answer?.AnswerToFollowUp)
-      // if (!response.ok) {
-      //   throw new Error(`Server responded with status ${response.status}`);
-      // }
-      addDoubt({ userDoubt, followUpResponse: followUpResponse });
-      // console.log(doubts)
-      setUserDoubt(""); // Reset user input
+      if (response.status !== 200) throw new Error(`Server responded with status ${response.status}`);
+      const followUpText = response.data.answer?.AnswerToFollowUp || "No response received";
+      setFollowUpResponse(followUpText);
+      addDoubt({ userDoubt, followUpResponse: followUpText, selectedCode: selectedText });
+      setUserDoubt("");
+    } catch (err) {
+      setError(err.response?.data?.error || "An error occurred");
+    } finally {
+      setLoading(false);
     }
-      catch (err) {
-        setError(err.response?.data?.error || "An error occurred");
-      } finally {
-        setLoading(false);
-      }
   };
 
+  if (!showDialogue) return null;
+
   return (
-    <>
-      {showDialogue && (
-        <div
-          className="doubt-dialogue"
-          style={{
-            position: "absolute",
-            top: dialoguePosition?.y + 400 || 0,
-            left: "75%",
-            width: "22%",
-            backgroundColor: "rgb(0, 39, 93)",
-            border: "1px solid #333",
-            borderRadius: "8px",
-            padding: "15px",
-            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.4)",
-            // color: "rgba(0, 46, 229, 0.4)",
-            fontFamily: "Arial, sans-serif",
-          }}
-        >
-          <div
-            onClick={() => {
-              setFollowUpResponse(null);
-              onClose();
-            }}
-            className="close-button"
-            style={{
-              cursor: "pointer",
-              fontWeight: "bold",
-              color: "white",
-              fontSize: "16px",
-            }}
-          >
-            ✖
+    <div 
+      ref={dialogueRef}
+      className={`doubt-dialogue ${isExpanded ? 'expanded' : 'collapsed'}`} 
+      style={{ top: `${position.top}px`, left: `${position.left}px` }}
+    >
+      <div className="doubt-dialogue-header">
+        <div className="header-content">
+          <div className="header-left">
+            <h2>Code Assistant</h2>
+            <span className="language-badge">{activeLanguage.toUpperCase()}</span>
           </div>
-
-          <textarea
-            placeholder="Ask your doubt here..."
-            value={userDoubt}
-            onChange={(e) => setUserDoubt(e.target.value)}
-            style={{
-              width: "90%",
-              height: "100px",
-              marginBottom: "10px",
-              padding: "5px",
-              backgroundColor: "#2a2a3d",
-              color: "#e5e5e5",
-              border: "1px solid #444",
-              borderRadius: "6px",
-              fontFamily: "inherit",
-              resize: "none",
-            }}
-          />
-
-          <button
-            onClick={handleDoubtSubmit}
-            style={{
-              padding: "10px 20px",
-              backgroundColor: "#007BFF",
-              color: "#fff",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontWeight: "bold",
-              fontSize: "14px",
-              transition: "all 0.3s ease",
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.backgroundColor = "#0056b3";
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.backgroundColor = "#007BFF";
-            }}
-          >
-            Submit Doubt
-          </button>
-          {loading && <p className="loading">Loading...</p>}
-          {error && <p className="error">Error: {error}</p>}
-          {/* Navigation Buttons */}
-          <div style={{ marginTop: "15px" }}>
-            <button
-              onClick={goToPreviousDoubt}
-              disabled={currentIndex === 0} // Disable when on the first doubt
-              style={{
-                marginRight: "10px",
-                padding: "8px 15px",
-                backgroundColor: currentIndex === 0 ? "#444" : "#007BFF",
-                color: "#fff",
-                border: "none",
-                borderRadius: "6px",
-                cursor: currentIndex === 0 ? "not-allowed" : "pointer",
-              }}
-            >
-              Previous
+          <div className="header-actions">
+            <button className="toggle-btn" onClick={() => setIsExpanded(!isExpanded)}>
+              {isExpanded ? '−' : '+'}
             </button>
+            <button className="close-btn" onClick={() => { setFollowUpResponse(null); onClose(); }}>
+              ×
+            </button>
+          </div>
+        </div>
+        {isExpanded && (
+          <div className="selected-code">
+            <div className="code-label">Selected Code:</div>
+            <div className="code-snippet">{selectedText}</div>
+          </div>
+        )}
+      </div>
 
-            <button
-              onClick={goToNextDoubt}
-              disabled={currentIndex === doubts.length - 1 || doubts.length === 0} // Disable when on the last doubt
-              style={{
-                padding: "8px 15px",
-                backgroundColor: currentIndex === doubts.length - 1 ? "#444" : "#007BFF",
-                color: "#fff",
-                border: "none",
-                borderRadius: "6px",
-                cursor: currentIndex === doubts.length - 1 ? "not-allowed" : "pointer",
-              }}
+      {isExpanded && (
+        <div className="doubt-dialogue-body">
+          <div className="input-container">
+            <textarea
+              placeholder="What would you like to know about this code?"
+              value={userDoubt}
+              onChange={(e) => setUserDoubt(e.target.value)}
+              className="doubt-input"
+            />
+            <button 
+              className={`submit-btn ${loading ? 'loading' : ''}`}
+              onClick={handleDoubtSubmit}
+              disabled={loading || !userDoubt}
             >
-              Next
+              {loading ? (
+                <div className="loading-spinner"></div>
+              ) : (
+                <span>Ask</span>
+              )}
             </button>
           </div>
 
-          {/* Display Current Doubt */}
+          {error && (
+            <div className="error-message">
+              <span className="error-icon">!</span>
+              <span>{error}</span>
+            </div>
+          )}
+
           {doubts.length > 0 && (
-            <div
-              style={{
-                marginTop: "15px",
-                backgroundColor: "#2a2a3d",
-                padding: "10px",
-                borderRadius: "6px",
-                color: "#e5e5e5",
-                fontSize: "14px",
-                lineHeight: "1.5",
-              }}
-            >
-              <h3 style={{ color: "#00d4ff" }}>Doubt {currentIndex + 1} ({doubts[currentIndex][1]}):</h3>
-              <p style={{fontSize:"18px"}}>{doubts[currentIndex][0]?.userDoubt}</p>
-              <h3 style={{ color: "#00d4ff" }}>Response:</h3>
-              <ReactMarkdown className="markdown-content">
-                {doubts[currentIndex][0]?.followUpResponse || "No response received."}
-              </ReactMarkdown>
+            <div className="doubt-history">
+              <div className="history-header">
+                <h3>Response History</h3>
+                <div className="navigation">
+                  <button
+                    className="nav-btn"
+                    onClick={goToPreviousDoubt}
+                    disabled={currentIndex === 0}
+                  >
+                    ←
+                  </button>
+                  <span className="nav-index">{currentIndex + 1} / {doubts.length}</span>
+                  <button
+                    className="nav-btn"
+                    onClick={goToNextDoubt}
+                    disabled={currentIndex === doubts.length - 1}
+                  >
+                    →
+                  </button>
+                </div>
+              </div>
+
+              <div className="doubt-content">
+                <div className="question-container">
+                  <div className="question-header">
+                    <span className="question-label">Question</span>
+                    <span className="timestamp">{doubts[currentIndex]?.timestamp}</span>
+                  </div>
+                  <p className="question-text">{doubts[currentIndex]?.userDoubt}</p>
+                </div>
+                
+                <div className="response-container">
+                  <div className="response-header">
+                    <span className="response-label">Response</span>
+                  </div>
+                  <ReactMarkdown className="markdown-content">
+                    {doubts[currentIndex]?.followUpResponse || "No response received."}
+                  </ReactMarkdown>
+                </div>
+              </div>
             </div>
           )}
         </div>
       )}
-    </>
+    </div>
   );
 };
 
