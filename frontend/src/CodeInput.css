@@ -1,0 +1,38 @@
+/* Add this to your CSS file */
+.coder h1,
+.coder h2,
+.coder h3 {
+  color: #1e3c72; /* Darker color for headings */
+}
+
+.coder code {
+  background-color: #ff0000; /* Light background for inline code */
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+.coder pre {
+  background-color: #282c34;
+  color: #ffff00;
+  padding: 10px;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.errorDecoration {
+  background-color: rgba(255, 0, 0, 0.1);
+}
+.suggestionDecoration {
+  background-color: rgba(0, 255, 0, 0.1);
+}
+.errorGlyph {
+  background-color: #ff5555;
+  width: 4px !important;
+  margin-left: 3px;
+}
+.suggestionGlyph {
+  background-color: #50fa7b;
+  width: 4px !important;
+  margin-left: 3px;
+}
+
