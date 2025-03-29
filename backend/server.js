@@ -1,10 +1,12 @@
 const express =require('express')
-const mongoose=require('mongoose')
+const cors = require('cors');
+// const mongoose=require('mongoose')
 require("dotenv").config()
-const workoutRoutes = require('./routes/workout')
+const geminiRoutes = require('./routes/geminiRoutes')
 const userRoutes = require('./routes/user')
-//Creates an express app
 const app= express()
+
+app.use(cors());
 
 //Middleware
 app.use(express.json())
@@ -14,23 +16,18 @@ app.get('/',(req,res,next)=>{
     next();
 })
 
-//Routes
-// app.get('/',(req,res)=>{
-//     res.json({mssg: "Welcome to the app"})
-// })
-
 //Connect to DB
-mongoose.connect(process.env.MONGO_URI)
-.then((req,res)=>
-//Listen for request
-app.listen(process.env.PORT, ()=>{
-    console.log('Connected to DB and Listening on port', process.env.PORT)
-}))
-.catch((err)=>console.log(err));
+// mongoose.connect(process.env.MONGO_URI)
+// .then((req,res)=>
+// //Listen for request
+// app.listen(process.env.PORT, ()=>{
+//     console.log('Connected to DB and Listening on port', process.env.PORT)
+// }))
+// .catch((err)=>console.log(err));
 
-app.use('/api/workouts',workoutRoutes)
 app.use('/api/user',userRoutes)
+app.use('/answerq',geminiRoutes)
 
-
-
-process.env
+app.listen(process.env.PORT, () => {
+    console.log(`Server running on port ${process.env.PORT}`);
+});

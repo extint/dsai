@@ -1,5 +1,7 @@
-
-import google.generativeai as genai
+import os
+from dotenv import load_dotenv
+import google.generativeai as oldgenai
+from google import genai
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from bs4 import BeautifulSoup
@@ -17,11 +19,11 @@ import ast
 import re
 from io import BytesIO
 
-# final_content = {'Codes': {'Python': '```Python\ndef quicksort(arr):\n    if len(arr) < 2:\n        return arr\n    else:\n        pivot = arr[0]\n        less = [i for i in arr[1:] if i <= pivot]\n        greater = [i for i in arr[1:] if i > pivot]\n        return quicksort(less) + [pivot] + quicksort(greater)\n\n```', 'C++': '```C++\n#include <iostream>\n#include <vector>\n\nint partition(std::vector<int>& arr, int low, int high) {\n    int pivot = arr[high];\n    int i = (low - 1);\n    for (int j = low; j <= high - 1; j++) {\n        if (arr[j] < pivot) {\n            i++;\n            std::swap(arr[i], arr[j]);\n        }\n    }\n    std::swap(arr[i + 1], arr[high]);\n    return (i + 1);\n}\n\nvoid quickSort(std::vector<int>& arr, int low, int high) {\n    if (low < high) {\n        int pi = partition(arr, low, high);\n        quickSort(arr, low, pi - 1);\n        quickSort(arr, pi + 1, high);\n    }\n}\n\nint main() {\n    std::vector<int> arr = {10, 7, 8, 9, 1, 5};\n    int n = arr.size();\n    quickSort(arr, 0, n - 1);\n    for (int i = 0; i < n; i++)\n        std::cout << arr[i] << " ";\n    std::cout << std::endl;\n    return 0;\n}\n```', 'Java': '```Java\nimport java.util.Arrays;\n\nclass QuickSort {\n\n    public static void quickSort(int[] arr, int low, int high) {\n        if (low < high) {\n            int pi = partition(arr, low, high);\n            quickSort(arr, low, pi - 1);\n            quickSort(arr, pi + 1, high);\n        }\n    }\n\n    static int partition(int[] arr, int low, int high) {\n        int pivot = arr[high];\n        int i = (low - 1);\n\n        for (int j = low; j <= high - 1; j++) {\n            if (arr[j] < pivot) {\n                i++;\n                swap(arr, i, j);\n            }\n        }\n        swap(arr, i + 1, high);\n        return (i + 1);\n    }\n\n    static void swap(int[] arr, int i, int j) {\n        int temp = arr[i];\n        arr[i] = arr[j];\n        arr[j] = temp;\n    }\n\n    public static void main(String[] args) {\n        int[] arr = {10, 7, 8, 9, 1, 5};\n        System.out.println("Unsorted array: " + Arrays.toString(arr));\n        quickSort(arr, 0, arr.length - 1);\n        System.out.println("Sorted array: " + Arrays.toString(arr));\n    }\n}\n```'}, 'Space_Complexity': 'O(log n) – due to the recursive calls.  In the worst case, it can be O(n).\n\n**Improvements and Alternatives:**\n\n* **Pivot Selection:**  Random pivot selection or median-of-three pivot selection can mitigate the worst-case scenario.\n* **In-place partitioning:** The provided code uses in-place partitioning, minimizing extra space usage.\n* **Alternatives:** Merge sort offers guaranteed O(n log n) performance but requires O(n) extra space.  Heapsort is another O(n log n) algorithm with O(1) extra space.  For smaller arrays, insertion sort might be more efficient due to its lower constant factors.', 'Improvements': "The provided Quicksort implementation can be improved in several ways:\n\n**1. Pivot Selection:**  Using the first element as the pivot is prone to worst-case performance with already sorted or reverse-sorted input.  Strategies like choosing a random pivot or the median-of-three (the median of the first, middle, and last elements) significantly reduce the likelihood of unbalanced partitions.\n\n**2. In-place Partitioning:** The current implementation creates new lists during partitioning, increasing space complexity.  An in-place partitioning algorithm modifies the original array directly, reducing space usage to O(log n) even in the average case and improving overall efficiency.  This involves using indices to track the partitioning boundaries within the original array rather than creating new lists.\n\n\n**3. Hybrid Approach:** For smaller subarrays (below a certain threshold), a simpler algorithm like insertion sort is often faster due to its lower overhead.  This hybrid approach combines the efficiency of Quicksort for larger arrays with the performance benefits of insertion sort for smaller ones.  A common threshold is around 10-15 elements.\n\n**4. Tail Recursion Optimization:**  While Python doesn't inherently optimize tail recursion,  a carefully structured implementation might allow for iterative processing instead of recursive calls, reducing the risk of stack overflow for very large inputs.  However, this often adds complexity and might not yield significant improvements in Python.", 'Time_Complexity': '* **Best Case:** O(n log n) – when the pivot consistently divides the array into roughly equal halves.\n* **Average Case:** O(n log n)\n* **Worst Case:** O(n²) – occurs when the pivot selection consistently results in highly unbalanced partitions (e.g., already sorted array and choosing the first or last element as pivot).', 'Logic': "The code implements the classic Quicksort algorithm using a recursive divide-and-conquer strategy.\n\n1. **Base Case:** If the input array `arr` has fewer than two elements, it's already sorted and returned.\n\n2. **Pivot Selection:** The first element of the array (`arr[0]`) is chosen as the pivot.  (Note:  This is a simple but potentially inefficient choice;  better pivot selection strategies exist.)\n\n3. **Partitioning:** The remaining elements are partitioned into two sub-arrays: `less` containing elements less than or equal to the pivot, and `greater` containing elements greater than the pivot.  List comprehensions efficiently achieve this partitioning.\n\n4. **Recursive Calls:** The `quicksort` function recursively sorts the `less` and `greater` sub-arrays.\n\n5. **Concatenation:** The sorted `less` array, the pivot, and the sorted `greater` array are concatenated to produce the fully sorted array, which is then returned.  This step combines the results of the recursive calls.\n\nThe algorithm's core logic lies in repeatedly partitioning the array around a pivot, recursively sorting the resulting sub-arrays, and then combining them.  The efficiency depends heavily on the choice of pivot and the resulting balance of the partitions."}
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})  # Allow all origins
 
+load_dotenv()
 # CHROMEDRIVER_PATH = r"./driver/chromedriver.exe"
 # options = Options()
 # options.headless = True
@@ -44,16 +46,17 @@ def main_extractor(language, response):
         '**Logic:**': "Logic",
         '```': "Code"
     }
-
+    print("Response: ",response.text,"\n")
+    
     current_section = None
     is_code_section = False
 
     for line in response.text.split('\n'):
         line_stripped = line.strip()
-
-        if line_stripped in section_markers:
+        print("stripped",line_stripped,"\n")
+        if section_markers in line_stripped:
             section_name = section_markers[line_stripped]
-
+            print("identified: ",section_name,"\n\n")
             if section_name == "Code":
                 is_code_section = not is_code_section
                 current_section = "Code" if is_code_section else None
@@ -80,6 +83,7 @@ def main_extractor(language, response):
 
     sections["Code"] = "\n".join(sections["Code"])
     sections['Code'] += '\n```'
+    # print("final: \n",sections,"\n\n\n\n")
     return sections
 
 def filter_response(response_text):
@@ -124,7 +128,7 @@ def final_parser(chat_sessions, structured_output):
     return content
 
 # Configure API key for Gemini
-genai.configure(api_key='AIzaSyBoa52-OM0bZczkf8-4e2YQytu2zB9DUqs')
+oldgenai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 # Languages to generate solutions for
 languages = ["Python", "C++", "Java"]
@@ -139,47 +143,63 @@ generation_config = {
 }
 
 # Initialize the model
-model = genai.GenerativeModel(
+model = oldgenai.GenerativeModel(
     model_name="gemini-1.5-flash",
     generation_config=generation_config,
 )
 
 chat_sessions = {}
-@app.route('/answer', methods=['GET','POST'])
+@app.route('/answer', methods=['POST'])
 def solve():
     try:
-        print("hi")
-        base_problem_statement = (
-            '''
-            Generate code for this problem in {language}, and include the following in your response:
-            Explanation of the logic, Time complexity and space complexity, any improvements or alternatives.
-            Respond in a concise, article-style manner without conversational phrases or further invitations for discussion.
-            '''
-        )
         user_input = request.json.get("problemStatement", "")
-        print(user_input," -> ps")
         if not user_input:
             return jsonify({"error": "Problem statement is required."}), 400
 
-        base_problem_statement = user_input + base_problem_statement
+        # JSON Schema (escaped properly)
+        json_schema = '''{
+            "Code": "string",
+            "Logic": "string",
+            "Time_Complexity": "string",
+            "Space_Complexity": "string",
+            "Improvements": "string"
+        }'''
+
+        base_problem_statement = f"""
+        You are my expert coding instructor. Generate a solution for the following problem in {{language}}.
+        The response **MUST** be in JSON format following this schema:
+
+        Problem Statement:
+        {user_input}
+        """
 
         structured_output = {}
-    
+        languages = {"python"}  # Can be expanded to multiple languages
+
         for language in languages:
             problem_statement = base_problem_statement.format(language=language)
-            chat_session = model.start_chat(history=[])
-            response = chat_session.send_message(problem_statement)
-            chat_sessions[language] = chat_session
-            output = main_extractor(language, response)
-            structured_output[language] = output
-            print("here")
 
-        final_content = final_parser(chat_sessions, structured_output)
-        # print(final_content)
-        return (final_content), 200
+            # Initialize Gemini client
+            chat_session = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+            response = chat_session.models.generate_content(
+                model='gemini-2.0-flash',
+                contents=problem_statement,
+            )
+
+            # Ensure response is valid JSON
+            try:
+                output = json.loads(response.text.strip("```json").strip("```"))  # Clean Markdown code block
+                structured_output[language] = output
+            except json.JSONDecodeError:
+                return jsonify({"error": "Invalid JSON response from AI"}), 500
+
+        # Wrap the structured output into JSON
+        final_response = {"solutions": structured_output}
+        return jsonify(final_response), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @app.route('/answer/query', methods=['GET','POST'])
 def answerQuery():
@@ -206,9 +226,9 @@ def refreshContent():
         if not section or not refreshLang:
             return jsonify({"error": f"Refresh Failed"}), 400
         print(refreshLang)
-        answer = chat_sessions[refreshLang].send_message(f"Can u generate the {section} section again in a more accurate way")
+        answer = chat_sessions[refreshLang].send_message(f"Can u generate the {section} section again in a more accurate way. If already accurate then return the same again. If it's the code then strictly only send code.")
         print("refreshed content:",answer.text)
-        return jsonify({"content":answer.text}), 200
+        return jsonify({"content":answer.text,"section":section}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -216,19 +236,14 @@ def refreshContent():
 def answerCode():
     try:
         code = request.json.get("code", "")
-        # language = request.json.get("language", "")
         if not code:
             return jsonify({"error": f"error"}), 400
-        # print(follow_up_question,language)
-        # answer = chat_sessions[language].send_message(follow_up_question)
         chat_session = model.start_chat(history=[])
         code_query = "Analayze the code and explain in detail"
         code_query += code
         response = chat_session.send_message(code_query)
-        print("doubt answer:",response.text)
-        # answer = "**Base Case:** If the input array `arr` has fewer than two elements, it's already sorted and returned.\n\n2. **Pivot Selection:** The first element of the array (`arr[0]`) is chosen as the pivot.  (Note:  This is a simple but potentially inefficient choice;  better pivot selection strategies exist.)\n\n3. **Partitioning:** The remaining elements are partitioned into two sub-arrays: `less` containing elements less than or equal to the pivot, and `greater` containing elements greater than the pivot.  List comprehensions efficiently achieve this partitioning.\n\n"
+        # print("doubt answer:",response.text)
         return jsonify({"answer":response.text}), 200
-        # return jsonify({"answer":answer}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
@@ -291,7 +306,8 @@ def analyze_code():
                             and provide a concise yet informative explanation.\n
                             Act as an expert coding instructor and guide me in refining the implementation. Offer constructive suggestions, best practices, and potential improvements.\n
                             Avoid conversational tones or AI-like phrasing—keep it structured and professional. Do not rewrite the entire code; instead, assist with the next logical steps, highlight possible optimizations, and suggest relevant test cases to validate functionality
-                           Don't use phrases like "The provided *" noone is manually provide the code snippet to you
+                            Respond as if you ar talking to me and teaching me.
+                           
                           '''
             explainations = chat_session.send_message(code_query)
             analysis_result["explanations"] = explainations.text
