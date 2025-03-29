@@ -41,11 +41,11 @@ const answerDSAQ = async (req, res) => {
                         responseSchema: {
                             type: SchemaType.OBJECT,
                             properties: {
-                                    Code: { type: SchemaType.STRING, nullable: true },
-                                    Logic: { type: SchemaType.STRING, nullable: true },
-                                    Time_Complexity: { type: SchemaType.STRING, nullable: true },
-                                    Space_Complexity: { type: SchemaType.STRING, nullable: true },
-                                    Improvements: { type: SchemaType.STRING, nullable: true },
+                                    Code: { type: SchemaType.STRING, nullable: false },
+                                    Logic: { type: SchemaType.STRING, nullable: false },
+                                    Time_Complexity: { type: SchemaType.STRING, nullable: false },
+                                    Space_Complexity: { type: SchemaType.STRING, nullable: false },
+                                    Improvements: { type: SchemaType.STRING, nullable: false },
                                     AnswerToFollowUp: { type: SchemaType.STRING, nullable: true }
                                 },
                             required: ['Code', 'Logic', 'Time_Complexity','Space_Complexity', 'Improvements', 'AnswerToFollowUp'],
@@ -105,11 +105,11 @@ const answerFollowUp = async (req, res) => {
                 responseSchema: {
                     type: SchemaType.OBJECT,
                     properties: {
-                            Code: { type: SchemaType.STRING, nullable: true },
-                            Logic: { type: SchemaType.STRING, nullable: true },
-                            Time_Complexity: { type: SchemaType.STRING, nullable: true },
-                            Space_Complexity: { type: SchemaType.STRING, nullable: true },
-                            Improvements: { type: SchemaType.STRING, nullable: true },
+                            Code: { type: SchemaType.STRING, nullable: false },
+                            Logic: { type: SchemaType.STRING, nullable: false },
+                            Time_Complexity: { type: SchemaType.STRING, nullable: false },
+                            Space_Complexity: { type: SchemaType.STRING, nullable: false },
+                            Improvements: { type: SchemaType.STRING, nullable: false },
                             AnswerToFollowUp: { type: SchemaType.STRING, nullable: true }
                         },
                     required: ['Code', 'Logic', 'Time_Complexity','Space_Complexity', 'Improvements', 'AnswerToFollowUp'],
@@ -150,7 +150,7 @@ const answerFollowUp = async (req, res) => {
  */
 const refreshContent = async (req, res) => {
     try {
-        const { section, language, historyData } = req.body;
+        const { section, language, historyData, question } = req.body;
         const sessionId = req.body.sessionId || req.cookies?.session_id || req.headers["x-session-id"];
 
         if (!sessionId) {
@@ -159,7 +159,7 @@ const refreshContent = async (req, res) => {
         if (!section) {
             return res.status(400).json({ error: `Section for ${language} code is required.` });
         }
-
+        console.log("namaste:\n",historyData)
         // Extract chat history from request
         const chatHistory = historyData?.chatHistory || [];
         
@@ -177,11 +177,11 @@ const refreshContent = async (req, res) => {
                 responseSchema: {
                     type: SchemaType.OBJECT,
                     properties: {
-                            Code: { type: SchemaType.STRING, nullable: true },
-                            Logic: { type: SchemaType.STRING, nullable: true },
-                            Time_Complexity: { type: SchemaType.STRING, nullable: true },
-                            Space_Complexity: { type: SchemaType.STRING, nullable: true },
-                            Improvements: { type: SchemaType.STRING, nullable: true },
+                            Code: { type: SchemaType.STRING, description:`STRICTLY GENERATE CODE in ${language} `, nullable: false },
+                            Logic: { type: SchemaType.STRING, nullable: false },
+                            Time_Complexity: { type: SchemaType.STRING, nullable: false },
+                            Space_Complexity: { type: SchemaType.STRING, nullable: false },
+                            Improvements: { type: SchemaType.STRING, nullable: false },
                             AnswerToFollowUp: { type: SchemaType.STRING, nullable: true }
                         },
                     required: ['Code', 'Logic', 'Time_Complexity','Space_Complexity', 'Improvements', 'AnswerToFollowUp'],
@@ -192,7 +192,7 @@ const refreshContent = async (req, res) => {
         const chat = model.startChat({ history: formattedHistory });
 
         // Request a deeper explanation
-        const finalQuery = `Provide a newer and more in-depth explanation for the ${section} section, ensuring technical correctness and clarity.`;
+        const finalQuery = `Question:${question}.\n Provide a newer version of the solution,for the question ensuring technical correctness and clarity.`;
         const result = await chat.sendMessage(finalQuery);
         const answer = JSON.parse(result.response.text());
 

@@ -72,7 +72,7 @@ const OutputSection = ({ output: initialOutput }) => {
         
         setRefreshingSection(section);
         setError(null);
-        
+        const question = ChatManager.getSessionData(sessionId).problemStatement
         try {
           const response = await axios.post(
             `http://127.0.0.1:${PORT}/answerq/refresh`,
@@ -80,6 +80,7 @@ const OutputSection = ({ output: initialOutput }) => {
               section: section, 
               language: activeLanguage,
               sessionId,
+              question,
               historyData: languageData // Send chat history with the request
             },
             { 
@@ -92,10 +93,10 @@ const OutputSection = ({ output: initialOutput }) => {
           if (response.status !== 200) throw new Error(`Server responded with status ${response.status}`);
           
           const newContent = response.data?.answer?.[section] || "No data available";
-          console.log(languageData?.[section]);
+          console.log(languageData);
           // console.log("ye:\n\n",languageData?.[section])
           languageData[section] = newContent
-          console.log(languageData?.[section]);
+          console.log(languageData);
           ChatManager.storeLanguageData(sessionId, activeLanguage, languageData);
 
             setSectionData((prevData) => ({

@@ -1,3 +1,4 @@
+/* Output Section */
 .output-section {
   background-color: #151519;
   padding: 24px;
@@ -7,10 +8,48 @@
   max-width: 90vw;
   margin: 0 auto;
   height: auto;
-  max-height: auto;
-  overflow-y: hidden;
+  /* max-height: 70vh; Limits height to prevent overflow */
+  /* overflow-y: auto; */
+  overflow-x: hidden;
 }
 
+/* Scrollbar Styling */
+.output-section::-webkit-scrollbar,
+.code-content::-webkit-scrollbar,
+.analysis-content::-webkit-scrollbar {
+  width: 8px; /* Slim, modern scrollbar */
+}
+
+.output-section::-webkit-scrollbar-track,
+.code-content::-webkit-scrollbar-track,
+.analysis-content::-webkit-scrollbar-track {
+  background: #1e1e24; /* Dark track */
+  border-radius: 10px;
+}
+
+.output-section::-webkit-scrollbar-thumb,
+.code-content::-webkit-scrollbar-thumb,
+.analysis-content::-webkit-scrollbar-thumb {
+  background: #3a3a4a; /* Gray scrollbar */
+  border-radius: 10px;
+  transition: background 0.3s ease-in-out;
+}
+
+.output-section::-webkit-scrollbar-thumb:hover,
+.code-content::-webkit-scrollbar-thumb:hover,
+.analysis-content::-webkit-scrollbar-thumb:hover {
+  background: #575770; /* Lightens on hover */
+}
+
+/* Firefox Scrollbar */
+.output-section,
+.code-content,
+.analysis-content {
+  scrollbar-width: thin;
+  scrollbar-color: #3a3a4a #1e1e24;
+}
+
+/* Title */
 .title {
   color: #4285f4;
   font-size: 1.8rem;
@@ -20,6 +59,7 @@
   letter-spacing: 0.5px;
 }
 
+/* Output Container */
 .output-container {
   display: flex;
   gap: 24px;
@@ -27,7 +67,7 @@
   min-height: 600px;
 }
 
-/* Code Panel (Left Side) */
+/* Code Panel */
 .code-panel {
   flex: 1;
   background-color: #0f1419;
@@ -37,12 +77,11 @@
   display: flex;
   flex-direction: column;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-  height:auto;
-  width:40vw;
-  scrollbar-width: 0px;
-
+  height: auto;
+  width: 40vw;
 }
 
+/* Panel Header */
 .panel-header {
   background-color: #1d232a;
   padding: 16px;
@@ -62,15 +101,17 @@
   flex: 0 0 auto;
 }
 
+/* Code Content - Allows Scroll */
 .code-content {
   flex: 1;
-  overflow: auto;
-  padding: 0;
+  overflow-y: auto; /* Enables vertical scrolling */
+  padding: 16px;
   position: relative;
-  width:auto;
-  height:auto;
+  width: auto;
+  height: auto;
 }
 
+/* Pre Elements - Ensure Scroll */
 .code-content pre {
   margin: 0 !important;
   border-radius: 0 !important;
@@ -79,13 +120,14 @@
   font-size: 15px !important;
 }
 
+/* Language Switcher */
 .language-switcher {
   display: flex;
   gap: 8px;
   flex: 1;
   justify-content: center;
   position: relative;
-  top:20%;
+  top: 20%;
 }
 
 .language-switcher button {
@@ -111,12 +153,14 @@
   font-weight: 500;
 }
 
+/* Action Buttons */
 .action-buttons {
   display: flex;
   gap: 8px;
 }
 
-.refresh-btn, .copy-btn {
+.refresh-btn,
+.copy-btn {
   background-color: rgba(66, 133, 244, 0.15);
   border: 1px solid #4285f4;
   color: #4285f4;
@@ -130,7 +174,8 @@
   transition: all 0.2s ease;
 }
 
-.refresh-btn:hover, .copy-btn:hover {
+.refresh-btn:hover,
+.copy-btn:hover {
   background-color: rgba(66, 133, 244, 0.3);
 }
 
@@ -145,7 +190,7 @@
   color: #0f9d58;
 }
 
-/* Analysis Panel (Right Side) */
+/* Analysis Panel */
 .analysis-panel {
   width: 40vw;
   display: flex;
@@ -153,9 +198,9 @@
   gap: 12px;
   height: auto;
   max-height: 50%;
-  /* overflow: hidden; */
 }
 
+/* Analysis Section - Allows Scroll */
 .analysis-section {
   background-color: #0f1419;
   border-radius: 12px;
@@ -165,7 +210,7 @@
   flex-direction: column;
   flex: 1;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-  height:fit-content;
+  height: fit-content;
   max-height: 40%;
 }
 
@@ -185,12 +230,14 @@
   margin: 0;
 }
 
+/* Scrollable Content */
 .analysis-content {
   flex: 1;
-  overflow: auto;
+  overflow-y: auto; /* Enables scrolling */
   padding: 16px;
 }
 
+/* Markdown Content */
 .markdown-content {
   color: #e8eaed;
   line-height: 1.6;
@@ -201,7 +248,9 @@
   margin: 0 0 12px 0;
 }
 
-.markdown-content h1, .markdown-content h2, .markdown-content h3 {
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3 {
   color: #4285f4;
 }
 
@@ -235,15 +284,16 @@
     flex-direction: column;
     height: auto;
   }
-  
-  .code-panel, .analysis-panel {
+
+  .code-panel,
+  .analysis-panel {
     width: 100%;
   }
-  
+
   .analysis-panel {
     height: auto;
   }
-  
+
   .analysis-section {
     min-height: 200px;
   }

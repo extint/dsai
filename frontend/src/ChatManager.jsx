@@ -37,6 +37,7 @@ const ChatManager = {
       sessionData.solutions = {};
     }
 
+    console.log("storing this:\n",data)
     sessionData.solutions[language] = data;
 
     this.storeSessionData(sessionId, sessionData);
