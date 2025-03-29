@@ -7,7 +7,7 @@ import DoubtDialogue from "./doubtDialogue";
 import "./OutputSection.css";
 import axios from "axios";
 import Cookies from "js-cookie";
-import { v4 as uuidv4 } from "uuid";
+import ChatManager from "./ChatManager";
 import python from "react-syntax-highlighter/dist/esm/languages/prism/python";
 import java from "react-syntax-highlighter/dist/esm/languages/prism/java";
 import cpp from "react-syntax-highlighter/dist/esm/languages/prism/cpp";
@@ -29,63 +29,76 @@ const OutputSection = ({ output: initialOutput }) => {
   const [error, setError] = useState(null);
 
   // Ensure each user gets a unique session ID
-  useEffect(() => {
-    let sessionId = Cookies.get("session_id");
-    if (!sessionId) {
-      sessionId = uuidv4();
-      Cookies.set("session_id", sessionId, { expires: 7, secure: true, sameSite: "Strict" });
-    }
-  }, []);
-
+  
   // Function to clean and structure code output
   const cleanCode = (code) => {
     if (!code) return "";
     return code.replace(/^```[a-zA-Z0-9+]*\n/, "").replace(/```$/, "").replace(/\n\n/g, "\n");
-  };
-
-  // Function to initialize sectionData from props
-  const initializeSectionData = (output) => {
-    if (!output || !output.solutions) return {};
-
-    const newData = {};
-    ["python", "cpp", "java"].forEach((lang) => {
-      newData[lang] = {
-        Code: cleanCode(output.solutions?.[lang]?.Code || "No code generated"),
-        Logic: output.solutions?.[lang]?.Logic || "No logic available",
-        Time_Complexity: output.solutions?.[lang]?.Time_Complexity || "No time complexity data",
-        Space_Complexity: output.solutions?.[lang]?.Space_Complexity || "No space complexity data",
+    };
+    
+    // Function to initialize sectionData from props
+    const initializeSectionData = (output) => {
+      if (!output || !output.solutions) return {};
+      
+      const newData = {};
+      ["python", "cpp", "java"].forEach((lang) => {
+        newData[lang] = {
+          Code: cleanCode(output.solutions?.[lang]?.Code || "No code generated"),
+          Logic: output.solutions?.[lang]?.Logic || "No logic available",
+          Time_Complexity: output.solutions?.[lang]?.Time_Complexity || "No time complexity data",
+          Space_Complexity: output.solutions?.[lang]?.Space_Complexity || "No space complexity data",
         Improvements: output.solutions?.[lang]?.Improvements || "No improvement suggestions",
       };
     });
-
+    
     return newData;
-  };
+    };
+    
+    // Sync new question's output when initialOutput changes
+    useEffect(() => {
+      setSectionData(initializeSectionData(initialOutput));
+      setSelectedText("");
+      setShowDialogue(false);
+      setError(null);
+      setRefreshingSection(null);
+      }, [initialOutput]);
+      
+      // Function to update section content on refresh
+      const refreshContent = async (section) => {
+        const sessionId = ChatManager.initSession()
+        const languageData = ChatManager.getLanguageData(sessionId, activeLanguage) || {
+          chatHistory: []
+        };
+        
+        setRefreshingSection(section);
+        setError(null);
+        
+        try {
+          const response = await axios.post(
+            `http://127.0.0.1:${PORT}/answerq/refresh`,
+            { 
+              section: section, 
+              language: activeLanguage,
+              sessionId,
+              historyData: languageData // Send chat history with the request
+            },
+            { 
+              headers: { 
+                "Content-Type": "application/json", 
+                "x-session-id": sessionId 
+              } 
+            }
+            );
+          if (response.status !== 200) throw new Error(`Server responded with status ${response.status}`);
+          
+          const newContent = response.data?.answer?.[section] || "No data available";
+          console.log(languageData?.[section]);
+          // console.log("ye:\n\n",languageData?.[section])
+          languageData[section] = newContent
+          console.log(languageData?.[section]);
+          ChatManager.storeLanguageData(sessionId, activeLanguage, languageData);
 
-  // Sync new question's output when initialOutput changes
-  useEffect(() => {
-    setSectionData(initializeSectionData(initialOutput));
-    setSelectedText("");
-    setShowDialogue(false);
-    setError(null);
-    setRefreshingSection(null);
-  }, [initialOutput]);
-
-  // Function to update section content on refresh
-  const refreshContent = async (section) => {
-    setRefreshingSection(section);
-    setError(null);
-    const sessionId = Cookies.get("session_id"); // Retrieve session ID
-
-    try {
-      const response = await axios.post(
-        `http://127.0.0.1:${PORT}/answerq/refresh`,
-        { section, language: activeLanguage },
-        { headers: { "Content-Type": "application/json", "x-session-id": sessionId } }
-      );
-
-      const newContent = response.data?.answer?.[section] || "No data available";
-
-      setSectionData((prevData) => ({
+            setSectionData((prevData) => ({
         ...prevData,
         [activeLanguage]: {
           ...prevData[activeLanguage],

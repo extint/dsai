@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import axios from "axios";
 import Cookies from "js-cookie";
-import { v4 as uuidv4 } from "uuid";
 import "./doubtDialogue.css";
+import ChatManager from "./ChatManager.jsx";
 
 const DoubtDialogue = ({ activeLanguage, selectedText, dialoguePosition, showDialogue, onClose }) => {
   const [userDoubt, setUserDoubt] = useState("");
@@ -15,19 +15,28 @@ const DoubtDialogue = ({ activeLanguage, selectedText, dialoguePosition, showDia
   const [isExpanded, setIsExpanded] = useState(true);
   const dialogueRef = useRef(null);
 
-  // Calculate optimal position based on selection
   const [position, setPosition] = useState({ top: 0, left: 0 });
 
-  // Initialize session ID and load cached doubts
+  // Load doubts from localStorage on component mount
   useEffect(() => {
-    let sessionId = Cookies.get("session_id");
-    if (!sessionId) {
-      sessionId = uuidv4();
-      Cookies.set("session_id", sessionId, { expires: 7, secure: true, sameSite: "Strict" });
+    // Get session ID
+    const sessionId = ChatManager.initSession();
+    
+    // Try to fetch existing doubts for this language
+    try {
+      const storedDoubts = localStorage.getItem(`doubts_${sessionId}_${activeLanguage}`);
+      if (storedDoubts) {
+        const parsedDoubts = JSON.parse(storedDoubts);
+        setDoubts(parsedDoubts);
+        // Set current index to the most recent doubt if any exist
+        if (parsedDoubts.length > 0) {
+          setCurrentIndex(parsedDoubts.length - 1);
+        }
+      }
+    } catch (err) {
+      console.error("Error loading doubts from localStorage:", err);
     }
-    const storedDoubts = Cookies.get("doubtsHistory");
-    if (storedDoubts) setDoubts(JSON.parse(storedDoubts));
-  }, []);
+  }, [activeLanguage]);
 
   // Update position based on selection position
   useEffect(() => { 
@@ -42,31 +51,40 @@ const DoubtDialogue = ({ activeLanguage, selectedText, dialoguePosition, showDia
       
       // Calculate ideal position (near the selection)
       let top = dialoguePosition.y + 300; // Slightly below selection
-      let left = dialoguePosition.x+dialoguePosition.width+800 ;
+      let left = dialoguePosition.x + dialoguePosition.width + 800;
       
       // Adjust if would go off screen
-      if (top + dialogueHeight > 2*viewportHeight) {
-        top = Math.max(20, dialoguePosition.y - dialogueHeight - 20); // Place above selection
+      if (top + dialogueHeight > 2 * viewportHeight) {
+        top = Math.max(20, dialoguePosition.y - dialogueHeight - 20);
       }
       
       if (left + dialogueWidth > viewportWidth) {
-        left = Math.max(20, viewportWidth - dialogueWidth - 20); // Adjust to fit screen width
+        left = Math.max(20, viewportWidth - dialogueWidth - 20); 
       }
       
       setPosition({ top, left });
     }
   }, [showDialogue, dialoguePosition]);
 
-  // Store doubts in cookies
+  // Store doubts in localStorage whenever they change
   useEffect(() => {
     if (doubts.length > 0) {
-      Cookies.set("doubtsHistory", JSON.stringify(doubts), { expires: 7, secure: true, sameSite: "Strict" });
+      try {
+        const sessionId = ChatManager.getCurrentSessionId();
+        localStorage.setItem(`doubts_${sessionId}_${activeLanguage}`, JSON.stringify(doubts));
+      } catch (err) {
+        console.error("Error saving doubts to localStorage:", err);
+      }
     }
-  }, [doubts]);
+  }, [doubts, activeLanguage]);
 
   const addDoubt = (doubt) => {
     setDoubts((prev) => {
-      const updatedDoubts = [...prev, { ...doubt, language: activeLanguage, timestamp: new Date().toLocaleString() }];
+      const updatedDoubts = [...prev, { 
+        ...doubt, 
+        language: activeLanguage, 
+        timestamp: new Date().toLocaleString() 
+      }];
       setCurrentIndex(updatedDoubts.length - 1);
       return updatedDoubts;
     });
@@ -77,30 +95,77 @@ const DoubtDialogue = ({ activeLanguage, selectedText, dialoguePosition, showDia
 
   const handleDoubtSubmit = async () => {
     if (!selectedText || !userDoubt) return;
-
+    
     const question = `${userDoubt}: \n${selectedText}`;
     setLoading(true);
     setError(null);
 
-    const sessionId = Cookies.get("session_id");
+    // Get session ID from ChatManager
+    const sessionId = ChatManager.getCurrentSessionId();
     const PORT = process.env.REACT_APP_PORT;
 
-    try {
-      const response = await axios.post(
-        `http://127.0.0.1:${PORT}/answerq/answerfollowup`,
-        { doubt: question, language: activeLanguage },
-        { headers: { "Content-Type": "application/json", "x-session-id": sessionId } }
-      );
+    // Retrieve language data or initialize if empty
+    let languageData = ChatManager.getLanguageData(sessionId, activeLanguage) || {};
 
-      if (response.status !== 200) throw new Error(`Server responded with status ${response.status}`);
-      const followUpText = response.data.answer?.AnswerToFollowUp || "No response received";
-      setFollowUpResponse(followUpText);
-      addDoubt({ userDoubt, followUpResponse: followUpText, selectedCode: selectedText });
-      setUserDoubt("");
+    // Ensure chatHistory exists as an array
+    if (!Array.isArray(languageData.chatHistory)) {
+        languageData.chatHistory = [];
+    }
+
+    try {
+        const response = await axios.post(
+            `http://127.0.0.1:${PORT}/answerq/answerfollowup`,
+            { 
+                doubt: question, 
+                language: activeLanguage,
+                sessionId,
+                historyData: languageData // Send chat history with the request
+            },
+            { 
+                headers: { 
+                    "Content-Type": "application/json", 
+                    "x-session-id": sessionId 
+                } 
+            }
+        );
+
+        if (response.status !== 200) throw new Error(`Server responded with status ${response.status}`);
+
+        const followUpText = response.data.answer?.AnswerToFollowUp || "No response received";
+        setFollowUpResponse(followUpText);
+
+        // Append new messages to chat history
+        languageData.chatHistory.push(
+            { role: 'user', content: question },
+            { role: 'model', content: followUpText }
+        );
+        
+        // Update localStorage with new chat history
+        ChatManager.storeLanguageData(sessionId, activeLanguage, languageData);
+
+        // Add to UI state & localStorage
+        const newDoubt = { 
+          userDoubt, 
+          followUpResponse: followUpText, 
+          selectedCode: selectedText,
+          codeContext: selectedText
+        };
+        addDoubt(newDoubt);
+        setUserDoubt("");
+
     } catch (err) {
-      setError(err.response?.data?.error || "An error occurred");
+        setError(err.response?.data?.error || "An error occurred");
     } finally {
-      setLoading(false);
+        setLoading(false);
+    }
+  };
+
+  const clearDoubtHistory = () => {
+    if (window.confirm("Are you sure you want to clear all doubts history?")) {
+      const sessionId = ChatManager.getCurrentSessionId();
+      localStorage.removeItem(`doubts_${sessionId}_${activeLanguage}`);
+      setDoubts([]);
+      setCurrentIndex(0);
     }
   };
 
@@ -204,6 +269,12 @@ const DoubtDialogue = ({ activeLanguage, selectedText, dialoguePosition, showDia
                     {doubts[currentIndex]?.followUpResponse || "No response received."}
                   </ReactMarkdown>
                 </div>
+              </div>
+              
+              <div className="history-actions">
+                <button className="clear-history-btn" onClick={clearDoubtHistory}>
+                  Clear History
+                </button>
               </div>
             </div>
           )}
