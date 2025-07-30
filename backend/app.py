@@ -347,7 +347,7 @@ def analyze_code():
     # Filter results based on requested analysis types
     filtered_result = {key: analysis_result[key] for key in analysis_types if key in analysis_result}
 
-    return jsonify(filtered_result)
+    return filtered_result
 
 
 # def fetch_problem_data(url):

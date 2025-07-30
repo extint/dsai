@@ -6,6 +6,9 @@ import { Copy, ChevronDown, Maximize2, XCircle, AlertCircle, MessageSquare, Bug,
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"; // Use Prism for syntax highlighting
 import { materialDark } from "react-syntax-highlighter/dist/cjs/styles/prism"; // Dark theme for syntax highlighting
+// import { stringify } from "uuid";
+
+const PORT = process.env.REACT_APP_PORT;
 
 const App = () => {
   const [code, setCode] = useState("// Type your code here");
@@ -106,7 +109,7 @@ const App = () => {
     const analyzeCode = async (currentCode) => {
       setIsAnalyzing(true);
       try {
-        const response = await fetch("http://127.0.0.1:5000/analyze-code", {
+        const response = await fetch(`http://127.0.0.1:${PORT}/analyze-code`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -226,7 +229,7 @@ const App = () => {
 
   const sendQueryToBackend = async (dsaiTask, currentCode) => {
     try {
-      const response = await fetch("http://127.0.0.1:5000/code-query", {
+      const response = await fetch(`http://127.0.0.1:${PORT}/code-query`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -274,9 +277,9 @@ const App = () => {
       padding: "20px",
       width: "150%",
       maxWidth: "1400px",
-      margin: "0 auto",
+      // margin: "0 auto",
       marginBottom: "-20px",
-      marginLeft: "-9%",
+      // marginLeft: "-9%",
       minHeight: "60vh",
       gap: "20px"
     }}>
@@ -482,7 +485,7 @@ const App = () => {
                   >
                     <div>
                       <ReactMarkdown components={components}>
-                        {explanations}
+                        {(explanations)}
                       </ReactMarkdown>
                     </div>
                   </div>

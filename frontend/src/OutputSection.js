@@ -11,6 +11,9 @@ import ChatManager from "./ChatManager";
 import python from "react-syntax-highlighter/dist/esm/languages/prism/python";
 import java from "react-syntax-highlighter/dist/esm/languages/prism/java";
 import cpp from "react-syntax-highlighter/dist/esm/languages/prism/cpp";
+import language from "react-syntax-highlighter/dist/esm/languages/hljs/1c";
+import Editor from "@monaco-editor/react";
+
 
 SyntaxHighlighter.registerLanguage("python", python);
 SyntaxHighlighter.registerLanguage("java", java);
@@ -27,15 +30,107 @@ const OutputSection = ({ output: initialOutput }) => {
   const [showDialogue, setShowDialogue] = useState(false);
   const [refreshingSection, setRefreshingSection] = useState(null);
   const [error, setError] = useState(null);
-
+  const [isTry, setIsTry] = useState(false);
+  const [generatedSkeletonCode, setGeneratedSkeletonCode] = useState("")
   // Ensure each user gets a unique session ID
+  const extractCommentsWithSpacing = (code, language) => {
+    const lines = code.split("\n");
+    let insideBlockComment = false;
+    let processedLines = [];
+
+    lines.forEach(line => {
+        const trimmedLine = line.trim();
+
+        if (language === "python") {
+            if (trimmedLine.startsWith("#")) {
+                processedLines.push(line); // Keep comment lines
+            } else if (trimmedLine.length > 0) {
+                processedLines.push(""); // Leave empty lines where code was
+            }
+        } else if (language === "cpp" || language === "java") {
+            if (trimmedLine.startsWith("//")) {
+                processedLines.push(line); // Keep single-line comments
+            } else if (trimmedLine.includes("/*")) {
+                insideBlockComment = true;
+                processedLines.push(line); // Keep start of block comment
+            } else if (insideBlockComment) {
+                processedLines.push(line); // Keep inside block comment
+                if (trimmedLine.includes("*/")) {
+                    insideBlockComment = false;
+                }
+            } else if (trimmedLine.length > 0) {
+                processedLines.push(""); // Leave empty lines where code was
+            }
+        } else {
+            processedLines.push(line); // Unsupported language: keep as is
+        }
+    });
+
+    return processedLines.join("\n");
+  }
+  const handleClickTry = async () => {
+    setIsTry(true);
+    setGeneratedSkeletonCode("Loading...");
   
+    try {
+      const sessionId = ChatManager.initSession();
+      const languageData = ChatManager.getLanguageData(sessionId, activeLanguage);
+      const question = ChatManager.getSessionData(sessionId).problemStatement;
+  
+      const response = await axios.post(
+        `http://127.0.0.1:${PORT}/answerq/skeletoncode`,
+        {
+          language: activeLanguage,
+          sessionId,
+          question,
+          historyData: languageData,
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "x-session-id": sessionId,
+          },
+        }
+      );
+  
+      if (response.status !== 200) throw new Error(`Server responded with ${response.status}`);
+  
+      // Ensure skeletonCode is valid
+      let skeletonCode = response?.data?.skeletonCode || "No skeleton code generated.";
+      try {
+        const data = JSON.parse(skeletonCode);
+        skeletonCode = data.Code || ""; // Return the code or an empty string if not found
+      } catch (error) {
+        console.error("Error parsing response:", error);
+        return "";
+      }   
+      
+      languageData.skeletonCode = skeletonCode;
+      // languageData.skeletonCode = extractCommentsWithSpacing(skeletonCode,activeLanguage);
+      
+      // Store updated data
+      ChatManager.storeLanguageData(sessionId, activeLanguage, languageData);
+  
+      if (typeof skeletonCode !== "string") {
+        throw new Error("Invalid skeleton code format");
+      }
+  
+      // setGeneratedSkeletonCode(skeletonCode);
+      // setGeneratedSkeletonCode(String(skeletonCode || "No skeleton code available"));
+      setGeneratedSkeletonCode(cleanCode(languageData.skeletonCode)|| "No skeleton code available");
+    } catch (error) {
+      console.error("Error fetching skeleton code:", error);
+      setGeneratedSkeletonCode("Failed to load skeleton code.");
+    }
+  };
+  
+
   // Function to clean and structure code output
   const cleanCode = (code) => {
     if (!code) return "";
-    return code.replace(/^```[a-zA-Z0-9+]*\n/, "").replace(/```$/, "").replace(/\n\n/g, "\n");
-    };
-    
+    return code.replace(/^```[a-zA-Z0-9+]*\n/, "").replace(/```$/, "").trim();
+  };
+      
     // Function to initialize sectionData from props
     const initializeSectionData = (output) => {
       if (!output || !output.solutions) return {};
@@ -53,6 +148,41 @@ const OutputSection = ({ output: initialOutput }) => {
     
     return newData;
     };
+
+    const debounce = (func, wait) => {
+      let timeout;
+      return function executedFunction(...args) {
+        const later = () => {
+          clearTimeout(timeout);
+          func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+      };
+    };
+
+    const handleEditorChange = debounce(async (value) => {
+    //  verfy the code tried by user peridoically
+  
+    }, 100);
+
+    const handleEditorDidMount = (editor, monaco) => {
+      // setEditor(editor);
+      // setMonaco(monaco);
+  
+      monaco.editor.defineTheme('customTheme', {
+        base: 'vs-dark',
+        inherit: true,
+        rules: [],
+        colors: {
+          'editor.lineHighlightBackground': '#1f1f1f',
+        }
+      });
+  
+      monaco.editor.setTheme('customTheme');
+      // setGeneratedSkeletonCode()
+    };
+
     
     // Sync new question's output when initialOutput changes
     useEffect(() => {
@@ -93,10 +223,7 @@ const OutputSection = ({ output: initialOutput }) => {
           if (response.status !== 200) throw new Error(`Server responded with status ${response.status}`);
           
           const newContent = response.data?.answer?.[section] || "No data available";
-          console.log(languageData);
-          // console.log("ye:\n\n",languageData?.[section])
           languageData[section] = newContent
-          console.log(languageData);
           ChatManager.storeLanguageData(sessionId, activeLanguage, languageData);
 
             setSectionData((prevData) => ({
@@ -143,12 +270,15 @@ const OutputSection = ({ output: initialOutput }) => {
               {["python", "cpp", "java"].map((language) => (
                 <button
                   key={language}
-                  onClick={() => setActiveLanguage(language)}
+                  onClick={() => (setActiveLanguage(language),setIsTry(false))}
                   className={activeLanguage === language ? "active" : ""}
                 >
                   {language.toUpperCase()}
                 </button>
               ))}
+              <button className={`try-btn ${isTry ? "active" : ""}`} onClick={handleClickTry}>
+                {isTry ? "Trying" : "Try"}
+              </button>
             </div>
             <div className="action-buttons">
               <button 
@@ -168,11 +298,28 @@ const OutputSection = ({ output: initialOutput }) => {
               </CopyToClipboard>
             </div>
           </div>
-          <div className="code-content" onMouseUp={handleTextSelection}>
+          {!isTry ? <div className="code-content" onMouseUp={handleTextSelection}>
             <SyntaxHighlighter language={activeLanguage} style={materialDark}>
               {sectionData?.[activeLanguage]?.Code || "No code generated"}
             </SyntaxHighlighter>
-          </div>
+          </div> : (
+          <Editor
+            height="100%"
+            width="100%"
+            language={activeLanguage}
+            theme="vs-dark"
+            value={generatedSkeletonCode || ""}
+            onChange={handleEditorChange}
+            onMount={handleEditorDidMount}
+            options={{
+              fontSize: 14,
+              minimap: { enabled: true },
+              lineNumbers: "on",
+              glyphMargin: true,
+              folding: true,
+            }}
+          />
+          )}
         </div>
         
         {/* Right Panel - Analysis Sections */}
@@ -206,6 +353,7 @@ const OutputSection = ({ output: initialOutput }) => {
           dialoguePosition={dialoguePosition}
           showDialogue={showDialogue}
           onClose={() => setShowDialogue(false)}
+          className="doubt-dialogue"
         />
       )}
       

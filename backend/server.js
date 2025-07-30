@@ -1,33 +1,39 @@
-const express =require('express')
+const express = require('express');
 const cors = require('cors');
-// const mongoose=require('mongoose')
-require("dotenv").config()
-const geminiRoutes = require('./routes/geminiRoutes')
-const userRoutes = require('./routes/user')
-const app= express()
+const http = require('http');
+const { Server } = require('socket.io');
+const dotenv = require('dotenv');
+dotenv.config();
+
+const geminiRoutes = require('./routes/geminiRoutes');
+const userRoutes = require('./routes/user');
+const roomRoutes = require('./routes/roomRoutes');
+const { setupRoomSocket } = require('./sockets/roomSocket');
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
 
 app.use(cors());
+app.use(express.json());
 
-//Middleware
-app.use(express.json())
+app.use((req, res, next) => {
+  console.log(req.method, req.path);
+  next();
+});
 
-app.get('/',(req,res,next)=>{
-    console.log(req.path, req.method);
-    next();
-})
+app.use('/api/user', userRoutes);
+app.use('/answerq', geminiRoutes);
+app.use('/api/rooms', roomRoutes);
 
-//Connect to DB
-// mongoose.connect(process.env.MONGO_URI)
-// .then((req,res)=>
-// //Listen for request
-// app.listen(process.env.PORT, ()=>{
-//     console.log('Connected to DB and Listening on port', process.env.PORT)
-// }))
-// .catch((err)=>console.log(err));
+setupRoomSocket(io);
 
-app.use('/api/user',userRoutes)
-app.use('/answerq',geminiRoutes)
-
-app.listen(process.env.PORT, () => {
-    console.log(`Server running on port ${process.env.PORT}`);
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });

@@ -1,20 +1,19 @@
+// import { Route } from 'lucide-react';
 import './App.css';
 import MyApp from './mainhome';
 import 'core-js/stable';
 import 'regenerator-runtime/runtime';
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import RoomPage from './comp_rooms/roomPage';
 
 function App() {
   return (
-    <div className="App">
-      <MyApp/>
-      
-      {/* <iframe src="http://localhost:3000" 
-              width="600" 
-              height="400" 
-              frameborder="0" 
-              allowfullscreen>
-      </iframe> */}
-    </div>
+    <Router>
+      <Routes>
+        <Route path="/" element = {<MyApp/>}/>
+        <Route path="/room/:roomId" element={<RoomPage />} />
+      </Routes>
+    </Router>
   );
 }
 
