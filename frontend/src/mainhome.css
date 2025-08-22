@@ -11,10 +11,41 @@ body {
   /* margin: 0 auto; */
   padding: 40px 20px;
 }
+.main-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 0px;
+  position: relative;
+}
 
+/* Buttons container on the left */
+.buttons-left {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+/* Header in the center */
 .header {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   text-align: center;
-  margin-bottom: 40px;
+  margin: 0;
+}
+
+/* Empty div to balance the layout */
+.spacer {
+  flex: 0 0 auto;
+  width: 0;
+}
+
+.comproomButton {
+  justify-self: flex-end;
+  margin-left: -100%;
+  width: 1000px;
 }
 
 .heading {
@@ -318,4 +349,89 @@ pre.code-block {
   /* color:white; */
   /* border-radius: 5px; */
   /* transform: translate(550%); */
+}
+
+/* Button styles */
+.configButton,
+.comproomButton {
+  background-color: transparent;
+  border: 1px solid #3c4043;
+  color: #e8eaed;
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  /* Remove all the weird positioning */
+  margin: 0;
+  width: auto;
+  justify-self: auto;
+}
+
+.configButton:hover,
+.comproomButton:hover {
+  background-color: #4285f4;
+  border-color: #4285f4;
+  color: #fff;
+}
+
+/* Responsive design */
+@media (max-width: 1024px) {
+  .main-head {
+    flex-direction: column;
+    gap: 15px;
+    padding: 15px 0;
+  }
+
+  .buttons-left {
+    order: 2;
+    justify-content: center;
+    width: 100%;
+  }
+
+  .header {
+    position: static;
+    transform: none;
+    order: 1;
+  }
+
+  .spacer {
+    display: none;
+  }
+
+  .configButton,
+  .comproomButton {
+    font-size: 0.85rem;
+    padding: 6px 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .buttons-left {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .configButton,
+  .comproomButton {
+    width: 100%;
+    max-width: 200px;
+  }
+
+  .heading {
+    font-size: 2.5rem;
+  }
+}
+
+@media (max-width: 320px) {
+  .heading {
+    font-size: 2rem;
+  }
+
+  .configButton,
+  .comproomButton {
+    font-size: 0.8rem;
+    padding: 5px 10px;
+  }
 }

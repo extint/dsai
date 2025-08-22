@@ -8,6 +8,7 @@ dotenv.config();
 const geminiRoutes = require('./routes/geminiRoutes');
 const userRoutes = require('./routes/user');
 const roomRoutes = require('./routes/roomRoutes');
+const leetcodeRoute = require('./routes/leetcodeRoute')
 const { setupRoomSocket } = require('./sockets/roomSocket');
 
 const app = express();
@@ -30,6 +31,7 @@ app.use((req, res, next) => {
 app.use('/api/user', userRoutes);
 app.use('/answerq', geminiRoutes);
 app.use('/api/rooms', roomRoutes);
+app.use('/api/leetcode', leetcodeRoute);
 
 setupRoomSocket(io);
 

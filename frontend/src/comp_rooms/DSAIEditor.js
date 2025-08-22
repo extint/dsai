@@ -75,7 +75,7 @@ const DSAIEditor = ({
     if (readOnly) return;
     
     try {
-      const res = await fetch(`http://127.0.0.1:${PORT}/code-query`, {
+      const res = await fetch(`http://127.0.0.1:${PORT}/answerq/code-query`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -104,7 +104,7 @@ const DSAIEditor = ({
     
     setIsAnalyzing(true);
     try {
-      const res = await fetch(`http://127.0.0.1:${PORT}/analyze-code`, {
+      const res = await fetch(`http://127.0.0.1:${PORT}/answerq/analyze-code`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
