@@ -13,6 +13,65 @@ const USERS_PER_PAGE = 3;
 const PORT = process.env.REACT_APP_PORT || 3000; // Make sure this matches your backend port
 
 export default function CompetitiveCodingRoom() {
+
+  // --- Metrics helpers ---
+  const now = () =>
+    (typeof performance !== 'undefined' && performance.now)
+      ? performance.now()
+      : Date.now();
+
+  const latencyBuckets = {
+    samples: [],
+    add(sample) {
+      this.samples.push(sample);
+      if (this.samples.length > 2000) this.samples.shift();
+    },
+    summary() {
+      const byType = {};
+      for (const s of this.samples) {
+        (byType[s.eventType] ||= []).push(s.e2eLatencyMs);
+      }
+      const pct = (arr, p) => {
+        if (!arr.length) return null;
+        const a = [...arr].sort((x, y) => x - y);
+        const idx = Math.floor((p / 100) * (a.length - 1));
+        return Number(a[idx].toFixed(2));
+      };
+      const out = {};
+      for (const [k, arr] of Object.entries(byType)) {
+        out[k] = { count: arr.length, p50: pct(arr, 50), p95: pct(arr, 95) };
+      }
+      return out;
+    }
+  };
+
+  const markClientReceiveAndRender = (eventType, payload = {}) => {
+    const clientRecvTs = now();
+    // Measure after React has painted
+    requestAnimationFrame(() => {
+      const clientRenderTs = now();
+      const base = payload.clientEmitTs ?? clientRecvTs; // if no origin stamp, measure recv->render
+      const e2eLatencyMs = Number((clientRenderTs - base).toFixed(2));
+      const sample = {
+        eventType,
+        eventId: payload.eventId || 'unknown',
+        e2eLatencyMs,
+        clientRecvMs: Number((clientRecvTs - base).toFixed(2))
+      };
+      console.log('[METRIC][CLIENT]', sample);
+      latencyBuckets.add(sample);
+    });
+  };
+
+  // Emit helper to add tracing stamps
+  const emitWithTrace = (socket, eventType, payload) => {
+    const eventId = `${eventType}-${Math.random().toString(36).slice(2)}-${Date.now()}`;
+    const clientEmitTs = now();
+    socket.emit(eventType, { ...payload, eventId, clientEmitTs });
+  };
+
+
+
   const { roomId } = useParams();
 
   // Generate unique username on every load (not editable, used internally)
@@ -78,7 +137,8 @@ export default function CompetitiveCodingRoom() {
     });
 
     // CRITICAL: Fix the contestEnded handler
-    socket.on('contestEnded', ({ ranking }) => {
+    socket.on('contestEnded', ({ ranking, eventId, clientEmitTs }) => {
+      markClientReceiveAndRender('contestEnded', { eventId, clientEmitTs });
       console.log('Contest ended event received with ranking:', ranking);
       console.log(ranking);
       setRankingData(ranking);
@@ -106,9 +166,25 @@ export default function CompetitiveCodingRoom() {
       setSubmissionStatus(null);
     });
 
-    socket.on('userListUpdate', (usersWithNicknames) => {
-      setUsers(usersWithNicknames);
+    socket.on('userListUpdate', (payload) => {
+      // Normalize to array
+      const list = Array.isArray(payload) ? payload : (payload?.users ?? []);
+      // Optionally, coerce items to expected shape { username, nickname }
+      const normalized = list.map(u => (
+        typeof u === 'string' ? { username: u, nickname: u } : {
+          username: u?.username ?? String(u?.user ?? ''),
+          nickname: u?.nickname ?? u?.username ?? String(u?.user ?? '')
+        }
+      ));
+      setUsers(normalized);
+
+      // Trace fields if present
+      const trace = Array.isArray(payload)
+        ? {}
+        : { eventId: payload.eventId, clientEmitTs: payload.clientEmitTs };
+      markClientReceiveAndRender('userListUpdate', trace);
     });
+
 
     socket.on('contestEnded', ({ ranking }) => {
       setRankingData(ranking);
@@ -131,10 +207,12 @@ export default function CompetitiveCodingRoom() {
 
     socket.on('loadAllCodes', (allCodes) => {
       setUserCodes(prev => ({ ...prev, ...allCodes }));
+      markClientReceiveAndRender('loadAllCodes', {});
     });
 
-    socket.on('userCodeUpdate', ({ user, code }) => {
+    socket.on('userCodeUpdate', ({ user, code, eventId, clientEmitTs }) => {
       setUserCodes(prev => ({ ...prev, [user]: code }));
+      markClientReceiveAndRender('userCodeUpdate', { eventId, clientEmitTs });
     });
 
     socket.on('loadUserCode', ({ user, code }) => {
@@ -155,11 +233,13 @@ export default function CompetitiveCodingRoom() {
       clearInterval(timerRef.current);
     });
 
-    socket.on('timerUpdate', ({ timeRemaining: remaining }) => {
+    socket.on('timerUpdate', ({ timeRemaining: remaining, eventId, clientEmitTs }) => {
       setTimeRemaining(remaining);
+      markClientReceiveAndRender('timerUpdate', { eventId, clientEmitTs });
     });
 
-    socket.on('userSubmissionUpdate', ({ user, status, timestamp }) => {
+    socket.on('userSubmissionUpdate', ({ user, status, timestamp, eventId, clientEmitTs }) => {
+      markClientReceiveAndRender('userSubmissionUpdate', { eventId, clientEmitTs });
       console.log('User submission update:', { user, status, timestamp });
       setUserSubmissions(prev => ({
         ...prev,
@@ -337,7 +417,7 @@ export default function CompetitiveCodingRoom() {
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       if (socketRef.current) {
-        socketRef.current.emit('userCodeChange', {
+        emitWithTrace(socketRef.current, 'userCodeChange', {
           roomId,
           username: username.current,
           code,
@@ -355,9 +435,19 @@ export default function CompetitiveCodingRoom() {
     return userSubmissions[user]?.status === 'success' || !roomStarted || roomEnded;
   };
 
+  useEffect(() => {
+    const id = setInterval(() => {
+      console.log('[METRIC][CLIENT][SUMMARY]', latencyBuckets.summary());
+    }, 10000);
+    return () => clearInterval(id);
+  }, []);
+
+
   // Prepare users arrays with destructuring for rendering
   const mainUser = username.current;
-  const otherUsers = users.filter(u => u.username !== mainUser);
+  const safeUsers = Array.isArray(users) ? users : [];
+const otherUsers = safeUsers.filter(u => u && u.username !== mainUser);
+  // const otherUsers = users.filter(u => u.username !== mainUser);
   const totalPages = Math.ceil(otherUsers.length / USERS_PER_PAGE);
   const startIdx = currentPage * USERS_PER_PAGE;
   const otherUsersToShow = otherUsers.slice(startIdx, startIdx + USERS_PER_PAGE);
@@ -384,10 +474,10 @@ export default function CompetitiveCodingRoom() {
 
         <div className="timer-section">
           {isSessionActive && timeRemaining !== null && (
-            <div style={{display:"flex", alignItems:"center",justifyContent:"center" }}  className={`timer ${timeRemaining <= 300 ? 'timer-warning' : ''}`}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }} className={`timer ${timeRemaining <= 300 ? 'timer-warning' : ''}`}>
               {/* <img src='/home/vedantmehra/Desktop/dsai/frontend/public/kitchen-timer.png'></img> */}
-            <Clock style={{marginRight: 15 + 'px'}} size={22} />
-              <span style={{fontSize: 25 + 'px'}} >{formatTime(timeRemaining)}</span>
+              <Clock style={{ marginRight: 15 + 'px' }} size={22} />
+              <span style={{ fontSize: 25 + 'px' }} >{formatTime(timeRemaining)}</span>
             </div>
           )}
 
@@ -547,7 +637,7 @@ export default function CompetitiveCodingRoom() {
 
 function ContestRankingsModal({ ranking, onClose }) {
   console.log('🏆 Rendering rankings modal with data:', ranking);
-  
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-content ranking-modal" onClick={e => e.stopPropagation()}>
@@ -557,7 +647,7 @@ function ContestRankingsModal({ ranking, onClose }) {
             ×
           </button>
         </div>
-        
+
         <div className="ranking-table-container">
           <table className="ranking-table">
             <thead>
@@ -591,7 +681,7 @@ function ContestRankingsModal({ ranking, onClose }) {
             </tbody>
           </table>
         </div>
-        
+
         <div className="modal-footer">
           <p>Total Participants: {ranking.length}</p>
         </div>
